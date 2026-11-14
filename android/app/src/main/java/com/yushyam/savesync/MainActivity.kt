@@ -41,6 +41,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.yushyam.savesync.data.model.AppSyncProfile
 import com.yushyam.savesync.data.model.AppSyncStatus
+import com.yushyam.savesync.data.model.CandidateApp
 import com.yushyam.savesync.data.model.SnapshotItem
 import com.yushyam.savesync.data.model.WebDavConfig
 import com.yushyam.savesync.data.shell.PrivilegeMode
@@ -128,7 +129,7 @@ fun MainScreen(
     var appToRemove by remember { mutableStateOf<AppSyncProfile?>(null) }
     var appForSnapshots by remember { mutableStateOf<AppSyncProfile?>(null) }
     var snapshotList by remember { mutableStateOf<List<SnapshotItem>>(emptyList()) }
-    var installedAppCandidates by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var installedAppCandidates by remember { mutableStateOf<List<CandidateApp>>(emptyList()) }
 
     fun saveAppsListToPrefs() {
         val json = gson.toJson(appsList.toList())
@@ -304,7 +305,16 @@ fun MainScreen(
                         val pm = context.packageManager
                         val list = pm.getInstalledApplications(PackageManager.GET_META_DATA)
                             .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
-                            .map { it.packageName to pm.getApplicationLabel(it).toString() }
+                            .map { appInfo ->
+                                val pkg = appInfo.packageName
+                                val label = pm.getApplicationLabel(appInfo).toString()
+                                val hasLauncher = pm.getLaunchIntentForPackage(pkg) != null
+                                val isExt = pkg.startsWith("eu.kanade.tachiyomi.extension") ||
+                                        pkg.startsWith("tachiyomi.extension") ||
+                                        !hasLauncher
+                                CandidateApp(packageName = pkg, displayName = label, isExtension = isExt)
+                            }
+                            .sortedWith(compareBy({ it.isExtension }, { it.displayName.lowercase() }))
                         withContext(Dispatchers.Main) {
                             installedAppCandidates = list
                             showAddAppDialog = true
@@ -1000,36 +1010,163 @@ fun MainScreen(
         }
     }
 
-    // 新增應用對話框
+    // 新增應用對話框 (支援即時搜尋與外掛/漫畫套件過濾)
     if (showAddAppDialog) {
+        var searchQuery by remember { mutableStateOf("") }
+        var hideExtensions by remember { mutableStateOf(true) }
+
+        val filteredCandidates = remember(installedAppCandidates, searchQuery, hideExtensions) {
+            installedAppCandidates.filter { app ->
+                if (hideExtensions && app.isExtension) {
+                    false
+                } else {
+                    searchQuery.isBlank() ||
+                        app.displayName.contains(searchQuery, ignoreCase = true) ||
+                        app.packageName.contains(searchQuery, ignoreCase = true)
+                }
+            }
+        }
+
+        val extensionCount = remember(installedAppCandidates) {
+            installedAppCandidates.count { it.isExtension }
+        }
+
         AlertDialog(
             onDismissRequest = { showAddAppDialog = false },
-            title = { Text("新增應用", fontWeight = FontWeight.Bold) },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("新增同步應用", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF0F172A))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF1F5F9)
+                    ) {
+                        Text(
+                            text = "${filteredCandidates.size} 個應用",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            },
             text = {
-                LazyColumn(modifier = Modifier.height(300.dp)) {
-                    items(installedAppCandidates) { (pkg, label) ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // 即時搜尋框
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("搜尋應用名稱或套件包名...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Default.Close, contentDescription = "清除", tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF0F172A),
+                            unfocusedBorderColor = Color(0xFFCBD5E1)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 外掛過濾開關
+                    if (extensionCount > 0) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    if (appsList.none { it.packageName == pkg }) {
-                                        val newProfile = AppSyncProfile(pkg, pkg, label)
-                                        appsList.add(newProfile)
-                                        saveAppsListToPrefs()
-                                        onShowToast("已加入: $label")
-                                        checkStatusForApp(newProfile)
-                                    }
-                                    showAddAppDialog = false
-                                }
-                                .padding(vertical = 10.dp),
+                                .clickable { hideExtensions = !hideExtensions }
+                                .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(label, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF0F172A))
-                                Text(pkg, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF64748B))
+                            Checkbox(
+                                checked = hideExtensions,
+                                onCheckedChange = { hideExtensions = it },
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "自動隱藏漫畫/外掛套件 (已收納 $extensionCount 個)",
+                                fontSize = 12.sp,
+                                color = Color(0xFF475569)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                    // 候選清單
+                    LazyColumn(modifier = Modifier.height(280.dp)) {
+                        if (filteredCandidates.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF94A3B8), modifier = Modifier.size(32.dp))
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("無符合條件的應用程式", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                                    }
+                                }
+                            }
+                        } else {
+                            items(filteredCandidates, key = { it.packageName }) { app ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (appsList.none { it.packageName == app.packageName }) {
+                                                val newProfile = AppSyncProfile(app.packageName, app.packageName, app.displayName)
+                                                appsList.add(newProfile)
+                                                saveAppsListToPrefs()
+                                                onShowToast("已加入: ${app.displayName}")
+                                                checkStatusForApp(newProfile)
+                                            }
+                                            showAddAppDialog = false
+                                        }
+                                        .padding(vertical = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(app.displayName, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color(0xFF0F172A))
+                                            if (app.isExtension) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = Color(0xFFF1F5F9)
+                                                ) {
+                                                    Text(
+                                                        text = "外掛",
+                                                        fontSize = 9.sp,
+                                                        color = Color(0xFF64748B),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Text(app.packageName, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF64748B))
+                                    }
+                                }
+                                HorizontalDivider(color = Color(0xFFF1F5F9))
                             }
                         }
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
                     }
                 }
             },

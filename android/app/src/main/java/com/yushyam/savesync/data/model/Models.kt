@@ -39,6 +39,12 @@ data class SnapshotItem(
     val filePath: String
 )
 
+data class CandidateApp(
+    val packageName: String,
+    val displayName: String,
+    val isExtension: Boolean = false
+)
+
 data class WebDavConfig(
     var url: String = "",
     var username: String = "",
