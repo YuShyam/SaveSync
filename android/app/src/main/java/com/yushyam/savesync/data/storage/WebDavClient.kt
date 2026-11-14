@@ -27,9 +27,9 @@ class WebDavClient(private val config: WebDavConfig) {
     )
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .writeTimeout(180, TimeUnit.SECONDS)
         .authenticator(authenticator)
         .build()
 
@@ -54,8 +54,9 @@ class WebDavClient(private val config: WebDavConfig) {
             val req = newRequestBuilder(config.url, "OPTIONS")
                 .method("OPTIONS", null)
                 .build()
-            val resp = client.newCall(req).execute()
-            resp.isSuccessful || resp.code == 200 || resp.code == 207 || resp.code == 405
+            client.newCall(req).execute().use { resp ->
+                resp.isSuccessful || resp.code == 200 || resp.code == 207 || resp.code == 405
+            }
         } catch (e: Exception) {
             false
         }
@@ -67,8 +68,9 @@ class WebDavClient(private val config: WebDavConfig) {
             .method("MKCOL", "".toRequestBody(null))
             .build()
         return try {
-            val resp = client.newCall(req).execute()
-            resp.isSuccessful || resp.code == 405
+            client.newCall(req).execute().use { resp ->
+                resp.isSuccessful || resp.code == 405
+            }
         } catch (e: Exception) {
             false
         }
@@ -80,8 +82,9 @@ class WebDavClient(private val config: WebDavConfig) {
         val body = file.asRequestBody("application/gzip".toMediaType())
         val req = newRequestBuilder(targetUrl, "PUT").put(body).build()
         return try {
-            val resp = client.newCall(req).execute()
-            resp.isSuccessful
+            client.newCall(req).execute().use { resp ->
+                resp.isSuccessful
+            }
         } catch (e: Exception) {
             false
         }
@@ -91,13 +94,18 @@ class WebDavClient(private val config: WebDavConfig) {
         val targetUrl = "${config.url.trimEnd('/')}/$packageName/latest.tar.gz"
         val req = newRequestBuilder(targetUrl, "GET").get().build()
         return try {
-            val resp = client.newCall(req).execute()
-            if (resp.isSuccessful && resp.body != null) {
-                destFile.parentFile?.mkdirs()
-                destFile.writeBytes(resp.body!!.bytes())
-                true
-            } else {
-                false
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful && resp.body != null) {
+                    destFile.parentFile?.mkdirs()
+                    resp.body!!.byteStream().use { input ->
+                        destFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
             }
         } catch (e: Exception) {
             false
@@ -108,12 +116,13 @@ class WebDavClient(private val config: WebDavConfig) {
         val targetUrl = "${config.url.trimEnd('/')}/$packageName/manifest.json"
         val req = newRequestBuilder(targetUrl, "GET").get().build()
         return try {
-            val resp = client.newCall(req).execute()
-            if (resp.isSuccessful && resp.body != null) {
-                val json = resp.body!!.string()
-                gson.fromJson(json, SyncManifest::class.java)
-            } else {
-                null
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful && resp.body != null) {
+                    val json = resp.body!!.string()
+                    gson.fromJson(json, SyncManifest::class.java)
+                } else {
+                    null
+                }
             }
         } catch (e: Exception) {
             null
@@ -127,8 +136,9 @@ class WebDavClient(private val config: WebDavConfig) {
         val body = json.toRequestBody("application/json".toMediaType())
         val req = newRequestBuilder(targetUrl, "PUT").put(body).build()
         return try {
-            val resp = client.newCall(req).execute()
-            resp.isSuccessful
+            client.newCall(req).execute().use { resp ->
+                resp.isSuccessful
+            }
         } catch (e: Exception) {
             false
         }

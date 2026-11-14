@@ -6,8 +6,40 @@ data class AppSyncProfile(
     val displayName: String,
     var isEnabled: Boolean = true,
     val relativePaths: List<String> = listOf("databases/", "shared_prefs/", "files/"),
-    val excludes: List<String> = listOf("cache", "code_cache", "app_webview", "no_backup")
+    val excludes: List<String> = DefaultExcludes.BASE
 )
+
+object DefaultExcludes {
+    val BASE = listOf("cache", "code_cache", "app_webview", "no_backup")
+
+    fun getExcludesFor(packageName: String): List<String> {
+        val list = BASE.toMutableList()
+        val pkg = packageName.lowercase()
+        when {
+            // Nintendo Switch 模擬器 (Eden, Yuzu, Suyu, Uzuy 等)：排除 300MB+ 韌體 NAND、著色器快取與記錄檔
+            pkg.contains("eden") || pkg.contains("yuzu") || pkg.contains("suyu") || pkg.contains("uzuy") -> {
+                list.addAll(listOf("*nand/system*", "*shader*", "*dump*", "*gpu*", "*gpu_drivers*", "*log*"))
+            }
+            // 3DS 模擬器 (Citra)
+            pkg.contains("citra") -> {
+                list.addAll(listOf("*sysdata*", "*shaders*", "*dump*", "*log*"))
+            }
+            // PS2 模擬器 (AetherSX2, NetherSX2)
+            pkg.contains("aethersx2") || pkg.contains("nethersx2") -> {
+                list.addAll(listOf("*bios*", "*shaders*", "*covers*", "*snaps*"))
+            }
+            // GameCube / Wii (Dolphin)
+            pkg.contains("dolphin") -> {
+                list.addAll(listOf("*Dump*", "*Shaders*", "*Sys*", "*Wii/title/00000001*"))
+            }
+            // PSP (PPSSPP)
+            pkg.contains("ppsspp") -> {
+                list.addAll(listOf("*SYSTEM/CACHE*", "*SYSTEM/SHADERS*", "*TEXTURES*"))
+            }
+        }
+        return list.distinct()
+    }
+}
 
 data class SyncManifest(
     val schema_version: Int = 1,

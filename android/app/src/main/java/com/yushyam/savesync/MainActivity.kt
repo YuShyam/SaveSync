@@ -140,7 +140,12 @@ fun MainScreen(
         val json = prefs.getString("saved_apps_list", null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<AppSyncProfile>>() {}.type
-            gson.fromJson(json, type)
+            val loaded: List<AppSyncProfile> = gson.fromJson(json, type) ?: emptyList()
+            loaded.map { profile ->
+                val smart = com.yushyam.savesync.data.model.DefaultExcludes.getExcludesFor(profile.packageName)
+                val merged = (profile.excludes + smart).distinct()
+                if (merged != profile.excludes) profile.copy(excludes = merged) else profile
+            }
         } catch (e: Exception) {
             emptyList()
         }
@@ -1132,7 +1137,8 @@ fun MainScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             if (appsList.none { it.packageName == app.packageName }) {
-                                                val newProfile = AppSyncProfile(app.packageName, app.packageName, app.displayName)
+                                                val smartExcludes = com.yushyam.savesync.data.model.DefaultExcludes.getExcludesFor(app.packageName)
+                                                val newProfile = AppSyncProfile(app.packageName, app.packageName, app.displayName, excludes = smartExcludes)
                                                 appsList.add(newProfile)
                                                 saveAppsListToPrefs()
                                                 onShowToast("已加入: ${app.displayName}")

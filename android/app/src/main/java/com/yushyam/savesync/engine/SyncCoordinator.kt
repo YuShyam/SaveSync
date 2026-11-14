@@ -3,6 +3,7 @@ package com.yushyam.savesync.engine
 import android.content.Context
 import com.yushyam.savesync.data.model.AppSyncProfile
 import com.yushyam.savesync.data.model.AppSyncStatus
+import com.yushyam.savesync.data.model.DefaultExcludes
 import com.yushyam.savesync.data.model.SnapshotItem
 import com.yushyam.savesync.data.model.SyncManifest
 import com.yushyam.savesync.data.model.WebDavConfig
@@ -48,7 +49,14 @@ class SyncCoordinator(
         return when (st) {
             AppSyncStatus.NEED_PULL -> {
                 val ok = pullApp(profile, maxKeepSnapshots)
-                Pair(ok, if (ok) "已下載雲端存檔" else "下載失敗")
+                val msg = if (ok) {
+                    if (profile.packageName == "app.mihon") {
+                        "已下載備份，請至 Mihon 點選『還原備份』"
+                    } else {
+                        "已下載雲端存檔"
+                    }
+                } else "下載失敗"
+                Pair(ok, msg)
             }
             AppSyncStatus.NEED_PUSH, AppSyncStatus.NO_REMOTE -> {
                 val ok = pushApp(profile, maxKeepSnapshots)
@@ -65,6 +73,11 @@ class SyncCoordinator(
                 Pair(ok, if (ok) "同步完成" else "同步失敗")
             }
         }
+    }
+
+    fun resolveExcludes(profile: AppSyncProfile): List<String> {
+        val smart = DefaultExcludes.getExcludesFor(profile.packageName)
+        return (profile.excludes + smart).distinct()
     }
 
     fun resolveAppDirectory(packageName: String): String {
@@ -101,12 +114,13 @@ class SyncCoordinator(
         val targetDir = resolveAppDirectory(profile.packageName)
 
         if (profile.packageName == "app.mihon") {
-            shell.exec("latest_bk=\$(find /sdcard/Documents /sdcard/Download -name '*.tachibk' -type f 2>/dev/null | head -n 1); if [ -n \"\$latest_bk\" ]; then mkdir -p /sdcard/Android/data/app.mihon/backup && cp \"\$latest_bk\" /sdcard/Android/data/app.mihon/backup/; fi")
+            shell.exec("latest_bk=\$(ls -t \$(find /sdcard/Documents /sdcard/Download -name '*.tachibk' 2>/dev/null) 2>/dev/null | head -n 1); if [ -n \"\$latest_bk\" ]; then mkdir -p /sdcard/Android/data/app.mihon/backup && cp \"\$latest_bk\" /sdcard/Android/data/app.mihon/backup/; fi")
         }
 
         val tmpTarPath = "/data/local/tmp/${profile.packageName}_app_sync.tar.gz"
-        val excludes = profile.excludes.joinToString(" ") { "--exclude='$it'" }
-        shell.exec("cd $targetDir && toybox tar -czf $tmpTarPath $excludes . && chmod 666 $tmpTarPath")
+        val effectiveExcludes = resolveExcludes(profile)
+        val excludesStr = effectiveExcludes.joinToString(" ") { "--exclude='$it'" }
+        shell.exec("cd $targetDir && toybox tar -czf $tmpTarPath $excludesStr . && chmod 666 $tmpTarPath")
 
         val tmpTarFile = File(tmpTarPath)
         if (!tmpTarFile.exists() || tmpTarFile.length() == 0L) {
@@ -114,8 +128,8 @@ class SyncCoordinator(
             return false
         }
 
-        // 先於本地建立滾動快照
-        createLocalRollbackSnapshot(profile, maxKeepSnapshots)
+        // 先於本地建立滾動快照 (直接複用已封裝檔案，避免重複消耗 CPU 與儲存壽命)
+        createLocalRollbackSnapshot(profile, maxKeepSnapshots, existingArchive = tmpTarFile)
 
         // 由 App 內部複製至專屬 cache，確保跨 UID 權限完整
         val localFile = File(context.cacheDir, "${profile.packageName}_push.tar.gz")
@@ -176,7 +190,7 @@ class SyncCoordinator(
         shell.exec(restoreCmd)
 
         if (profile.packageName == "app.mihon") {
-            shell.exec("if [ -d /sdcard/Android/data/app.mihon/backup ]; then mkdir -p /sdcard/Documents/Mihon && cp -r /sdcard/Android/data/app.mihon/backup/* /sdcard/Documents/Mihon/; fi")
+            shell.exec("if [ -d /sdcard/Android/data/app.mihon/backup ]; then mkdir -p /sdcard/Documents/Mihon/autobackup && cp -f /sdcard/Android/data/app.mihon/backup/* /sdcard/Documents/Mihon/autobackup/ && cp -f /sdcard/Android/data/app.mihon/backup/* /sdcard/Documents/Mihon/; fi")
         }
 
         saveLocalLedger(remoteManifest)
@@ -184,20 +198,28 @@ class SyncCoordinator(
     }
 
     // 建立本地安全還原快照 (滾動保留最新指定份數)
-    fun createLocalRollbackSnapshot(profile: AppSyncProfile, maxKeep: Int = 3): Boolean {
+    fun createLocalRollbackSnapshot(profile: AppSyncProfile, maxKeep: Int = 3, existingArchive: File? = null): Boolean {
         return try {
-            val targetDir = resolveAppDirectory(profile.packageName)
             val snapshotDir = File(context.filesDir, "snapshots/${profile.packageName}")
             if (!snapshotDir.exists()) snapshotDir.mkdirs()
 
             val now = System.currentTimeMillis()
+            val destFile = File(snapshotDir, "snapshot_${now}.tar.gz")
+
+            if (existingArchive != null && existingArchive.exists() && existingArchive.length() > 0L) {
+                existingArchive.copyTo(destFile, overwrite = true)
+                cleanOldSnapshots(snapshotDir, maxKeep = maxKeep)
+                return true
+            }
+
+            val targetDir = resolveAppDirectory(profile.packageName)
             val tmpSnapPath = "/data/local/tmp/${profile.packageName}_snap_${now}.tar.gz"
-            val excludes = profile.excludes.joinToString(" ") { "--exclude='$it'" }
-            shell.exec("cd $targetDir && toybox tar -czf $tmpSnapPath $excludes . && chmod 666 $tmpSnapPath")
+            val effectiveExcludes = resolveExcludes(profile)
+            val excludesStr = effectiveExcludes.joinToString(" ") { "--exclude='$it'" }
+            shell.exec("cd $targetDir && toybox tar -czf $tmpSnapPath $excludesStr . && chmod 666 $tmpSnapPath")
 
             val tmpFile = File(tmpSnapPath)
             if (tmpFile.exists() && tmpFile.length() > 0L) {
-                val destFile = File(snapshotDir, "snapshot_${now}.tar.gz")
                 tmpFile.copyTo(destFile, overwrite = true)
                 shell.exec("rm -f $tmpSnapPath")
 
