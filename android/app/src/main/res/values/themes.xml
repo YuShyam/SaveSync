@@ -1,0 +1,4 @@
+<resources>
+    <style name="Theme.DroidSaveSync" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
+

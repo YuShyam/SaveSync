@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.75"
+        android:scaleY="0.75"
+        android:translateX="13.5"
+        android:translateY="13.5">
+        <!-- 外層同步圓弧 (Sync Orbits) -->
+        <path
+            android:fillColor="#38BDF8"
+            android:pathData="M54,20 C68.359,20 80.528,29.176 85.048,42 L77.584,42 C73.498,33.155 64.492,27 54,27 C41.298,27 30.707,35.895 28.083,48 L20.917,48 C23.639,32.228 37.387,20 54,20 Z" />
+        <path
+            android:fillColor="#38BDF8"
+            android:pathData="M83,42 L94,42 L88.5,53 Z" />
+
+        <path
+            android:fillColor="#818CF8"
+            android:pathData="M54,88 C39.641,88 27.472,78.824 22.952,66 L30.416,66 C34.502,74.845 43.508,81 54,81 C66.702,81 77.293,72.105 79.917,60 L87.083,60 C84.361,75.772 70.613,88 54,88 Z" />
+        <path
+            android:fillColor="#818CF8"
+            android:pathData="M25,66 L14,66 L19.5,55 Z" />
+
+        <!-- 核心存檔保險箱 / 磁碟 (Save Vault Core) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M38,36 L64,36 L70,42 L70,72 C70,74.209 68.209,76 66,76 L38,76 C35.791,76 34,74.209 34,72 L34,40 C34,37.791 35.791,36 38,36 Z" />
+        <path
+            android:fillColor="#0F172A"
+            android:pathData="M40,38 L62,38 L62,48 L40,48 Z" />
+        <path
+            android:fillColor="#38BDF8"
+            android:pathData="M42,56 L62,56 L62,72 L42,72 Z" />
+    </group>
+</vector>
+

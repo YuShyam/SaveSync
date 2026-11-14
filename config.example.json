@@ -1,0 +1,28 @@
+{
+  "storage_backend": "webdav",
+  "webdav": {
+    "url": "https://dav.your-nas.com/DroidSaveSync",
+    "username": "your_username",
+    "password": "your_password"
+  },
+  "device_name": "Device_01",
+  "apps": [
+    {
+      "id": "mihon",
+      "package_name": "app.mihon",
+      "display_name": "Mihon 漫畫閱讀器",
+      "relative_paths": [
+        "databases/tachiyomi.db*",
+        "shared_prefs/app.mihon_preferences.xml",
+        "files/"
+      ],
+      "excludes": [
+        "cache",
+        "code_cache",
+        "app_webview",
+        "no_backup"
+      ]
+    }
+  ]
+}
+
