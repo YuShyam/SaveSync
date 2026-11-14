@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.droidsave.sync"
+    namespace = "com.yushyam.savesync"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.droidsave.sync"
+        applicationId = "com.yushyam.savesync"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

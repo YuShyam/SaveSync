@@ -39,6 +39,7 @@
             android:name=".receiver.SyncBroadcastReceiver"
             android:exported="true">
             <intent-filter>
+                <action android:name="com.yushyam.savesync.ACTION_SYNC_ALL" />
                 <action android:name="com.droidsave.sync.ACTION_SYNC_ALL" />
                 <action android:name="sync.all" />
                 <action android:name="sync" />

@@ -1,4 +1,4 @@
-package com.droidsave.sync.receiver
+package com.yushyam.savesync.receiver
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,11 +7,11 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
-import com.droidsave.sync.data.model.AppSyncProfile
-import com.droidsave.sync.data.model.WebDavConfig
-import com.droidsave.sync.data.shell.PrivilegeMode
-import com.droidsave.sync.data.shell.ShellManager
-import com.droidsave.sync.engine.SyncCoordinator
+import com.yushyam.savesync.data.model.AppSyncProfile
+import com.yushyam.savesync.data.model.WebDavConfig
+import com.yushyam.savesync.data.shell.PrivilegeMode
+import com.yushyam.savesync.data.shell.ShellManager
+import com.yushyam.savesync.engine.SyncCoordinator
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +24,7 @@ class SyncBroadcastReceiver : BroadcastReceiver() {
     private val tag = "SyncBroadcastReceiver"
 
     companion object {
-        const val ACTION_SYNC_ALL = "com.droidsave.sync.ACTION_SYNC_ALL"
+        const val ACTION_SYNC_ALL = "com.yushyam.savesync.ACTION_SYNC_ALL"
         const val ACTION_SYNC_SHORT = "sync.all"
         const val ACTION_SYNC_MINI = "sync"
     }
@@ -37,7 +37,7 @@ class SyncBroadcastReceiver : BroadcastReceiver() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val prefs = context.getSharedPreferences("droidsave_prefs", Context.MODE_PRIVATE)
+                    val prefs = context.getSharedPreferences("savesync_prefs", Context.MODE_PRIVATE)
                     val gson = Gson()
 
                     val json = prefs.getString("saved_apps_list", null)

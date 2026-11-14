@@ -1,4 +1,4 @@
-package com.droidsave.sync.data.model
+package com.yushyam.savesync.data.model
 
 data class AppSyncProfile(
     val id: String,

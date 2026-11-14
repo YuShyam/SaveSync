@@ -1,4 +1,4 @@
-package com.droidsave.sync.data.storage
+package com.yushyam.savesync.data.storage
 
 import okhttp3.Authenticator
 import okhttp3.Credentials

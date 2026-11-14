@@ -1,4 +1,4 @@
-package com.droidsave.sync.data.shell
+package com.yushyam.savesync.data.shell
 
 import android.content.Context
 import android.content.pm.PackageManager

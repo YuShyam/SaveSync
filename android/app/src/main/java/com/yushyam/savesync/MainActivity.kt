@@ -1,4 +1,4 @@
-package com.droidsave.sync
+package com.yushyam.savesync
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -39,14 +39,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.droidsave.sync.data.model.AppSyncProfile
-import com.droidsave.sync.data.model.AppSyncStatus
-import com.droidsave.sync.data.model.SnapshotItem
-import com.droidsave.sync.data.model.WebDavConfig
-import com.droidsave.sync.data.shell.PrivilegeMode
-import com.droidsave.sync.data.shell.ShellManager
-import com.droidsave.sync.data.storage.WebDavClient
-import com.droidsave.sync.engine.SyncCoordinator
+import com.yushyam.savesync.data.model.AppSyncProfile
+import com.yushyam.savesync.data.model.AppSyncStatus
+import com.yushyam.savesync.data.model.SnapshotItem
+import com.yushyam.savesync.data.model.WebDavConfig
+import com.yushyam.savesync.data.shell.PrivilegeMode
+import com.yushyam.savesync.data.shell.ShellManager
+import com.yushyam.savesync.data.storage.WebDavClient
+import com.yushyam.savesync.engine.SyncCoordinator
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -102,7 +102,7 @@ fun MainScreen(
     var privilegeMode by remember { mutableStateOf(PrivilegeMode.NONE) }
     var privilegeDiagnosis by remember { mutableStateOf("檢測中...") }
 
-    val prefs = remember { context.getSharedPreferences("droidsave_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember { context.getSharedPreferences("savesync_prefs", Context.MODE_PRIVATE) }
     val gson = remember { Gson() }
 
     var webDavConfig by remember {
@@ -967,7 +967,7 @@ fun MainScreen(
                                     .apply()
 
                                 if (autoSyncEnabled) {
-                                    val workRequest = PeriodicWorkRequestBuilder<com.droidsave.sync.worker.SyncWorker>(6, TimeUnit.HOURS)
+                                    val workRequest = PeriodicWorkRequestBuilder<com.yushyam.savesync.worker.SyncWorker>(6, TimeUnit.HOURS)
                                         .setConstraints(
                                             Constraints.Builder()
                                                 .setRequiresBatteryNotLow(true)
@@ -975,12 +975,12 @@ fun MainScreen(
                                         )
                                         .build()
                                     WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                                        "droidsave_periodic_sync",
+                                        "savesync_periodic_sync",
                                         ExistingPeriodicWorkPolicy.UPDATE,
                                         workRequest
                                     )
                                 } else {
-                                    WorkManager.getInstance(context).cancelUniqueWork("droidsave_periodic_sync")
+                                    WorkManager.getInstance(context).cancelUniqueWork("savesync_periodic_sync")
                                 }
 
                                 showSettingsDialog = false

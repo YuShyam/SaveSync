@@ -1,13 +1,13 @@
-package com.droidsave.sync.engine
+package com.yushyam.savesync.engine
 
 import android.content.Context
-import com.droidsave.sync.data.model.AppSyncProfile
-import com.droidsave.sync.data.model.AppSyncStatus
-import com.droidsave.sync.data.model.SnapshotItem
-import com.droidsave.sync.data.model.SyncManifest
-import com.droidsave.sync.data.model.WebDavConfig
-import com.droidsave.sync.data.shell.ShellManager
-import com.droidsave.sync.data.storage.WebDavClient
+import com.yushyam.savesync.data.model.AppSyncProfile
+import com.yushyam.savesync.data.model.AppSyncStatus
+import com.yushyam.savesync.data.model.SnapshotItem
+import com.yushyam.savesync.data.model.SyncManifest
+import com.yushyam.savesync.data.model.WebDavConfig
+import com.yushyam.savesync.data.shell.ShellManager
+import com.yushyam.savesync.data.storage.WebDavClient
 import java.io.File
 import java.security.MessageDigest
 import java.text.SimpleDateFormat

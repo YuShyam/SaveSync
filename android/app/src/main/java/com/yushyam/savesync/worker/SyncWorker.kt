@@ -1,14 +1,14 @@
-package com.droidsave.sync.worker
+package com.yushyam.savesync.worker
 
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.droidsave.sync.data.model.AppSyncProfile
-import com.droidsave.sync.data.model.WebDavConfig
-import com.droidsave.sync.data.shell.PrivilegeMode
-import com.droidsave.sync.data.shell.ShellManager
-import com.droidsave.sync.engine.SyncCoordinator
+import com.yushyam.savesync.data.model.AppSyncProfile
+import com.yushyam.savesync.data.model.WebDavConfig
+import com.yushyam.savesync.data.shell.PrivilegeMode
+import com.yushyam.savesync.data.shell.ShellManager
+import com.yushyam.savesync.engine.SyncCoordinator
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +23,7 @@ class SyncWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         Log.i(tag, "SaveSync 背景排程同步工作開始執行...")
-        val prefs = appContext.getSharedPreferences("droidsave_prefs", Context.MODE_PRIVATE)
+        val prefs = appContext.getSharedPreferences("savesync_prefs", Context.MODE_PRIVATE)
         val gson = Gson()
 
         val json = prefs.getString("saved_apps_list", null)

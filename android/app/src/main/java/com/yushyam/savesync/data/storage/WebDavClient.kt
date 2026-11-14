@@ -1,7 +1,7 @@
-package com.droidsave.sync.data.storage
+package com.yushyam.savesync.data.storage
 
-import com.droidsave.sync.data.model.SyncManifest
-import com.droidsave.sync.data.model.WebDavConfig
+import com.yushyam.savesync.data.model.SyncManifest
+import com.yushyam.savesync.data.model.WebDavConfig
 import com.google.gson.Gson
 import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
