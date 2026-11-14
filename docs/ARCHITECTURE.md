@@ -1,6 +1,6 @@
-# DroidSaveSync 系統架構書 (System Architecture Document)
+# SaveSync 系統架構書 (System Architecture Document)
 
-本文件定義 `DroidSaveSync` 之系統架構、元件分層、通訊流程與關鍵架構決策記錄 (Architecture Decision Records, ADR)。
+本文件定義 `SaveSync` 之系統架構、元件分層、通訊流程與關鍵架構決策記錄 (Architecture Decision Records, ADR)。
 
 ---
 

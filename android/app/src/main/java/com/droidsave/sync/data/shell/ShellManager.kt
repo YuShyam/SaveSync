@@ -57,7 +57,7 @@ class ShellManager(private val context: Context) {
             if (!Shizuku.pingBinder()) {
                 "尚未取得提權（未偵測到 Root 或 Shizuku 服務）"
             } else if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                "Shizuku 已安裝，但尚未授權給 DroidSaveSync"
+                "Shizuku 已安裝，但尚未授權給 SaveSync"
             } else {
                 "Shizuku 已授權，但服務尚未透過無線偵錯或 ADB 啟動"
             }

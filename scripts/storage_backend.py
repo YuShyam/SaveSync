@@ -1,4 +1,4 @@
-"""DroidSaveSync 雲端儲存適配層 (Storage Backend Adapter).
+"""SaveSync 雲端儲存適配層 (Storage Backend Adapter).
 
 支援標準 WebDAV 協定與本機模擬測試庫 (Local Mock Vault)。
 Supports standard WebDAV protocol and Local Mock Vault for testing.
@@ -94,7 +94,7 @@ class WebDavStorageBackend(BaseStorageBackend):
         self.opener = urllib.request.build_opener(*handlers)
 
     def _get_headers(self) -> Dict[str, str]:
-        return {"User-Agent": "DroidSaveSync/1.0"}
+        return {"User-Agent": "SaveSync/1.0"}
 
     def ensure_remote_dir(self, remote_dir: str) -> bool:
         """建立遠端目錄 MKCOL (Ensure remote directory exists)."""

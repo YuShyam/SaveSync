@@ -1,4 +1,4 @@
-"""DroidSaveSync 指令列工具 (Command Line Interface Tool).
+"""SaveSync 指令列工具 (Command Line Interface Tool).
 
 提供 check, push, pull, sync 等自動化與手動調度功能。
 Command line interface supporting check, push, pull, and auto-sync.
@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from storage_backend import LocalMockStorageBackend, WebDavStorageBackend
-from sync_engine import AdbDeviceBridge, DroidSaveSyncEngine
+from sync_engine import AdbDeviceBridge, SaveSyncEngine
 
 
 def load_config() -> dict:
@@ -22,7 +22,7 @@ def load_config() -> dict:
     return json.loads(config_file.read_text(encoding="utf-8"))
 
 
-def get_engine(config: dict, device_serial: str = "127.0.0.1:16384", adb_path: str = "") -> DroidSaveSyncEngine:
+def get_engine(config: dict, device_serial: str = "127.0.0.1:16384", adb_path: str = "") -> SaveSyncEngine:
     if not adb_path:
         adb_path = r"C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe"
 
@@ -43,11 +43,11 @@ def get_engine(config: dict, device_serial: str = "127.0.0.1:16384", adb_path: s
         cloud_mock_dir = Path(__file__).parent.parent / "cloud_vault"
         storage = LocalMockStorageBackend(cloud_mock_dir)
 
-    return DroidSaveSyncEngine(bridge=bridge, storage=storage, workspace_dir=workspace_root)
+    return SaveSyncEngine(bridge=bridge, storage=storage, workspace_dir=workspace_root)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="DroidSaveSync CLI")
+    parser = argparse.ArgumentParser(description="SaveSync CLI")
     parser.add_argument("action", choices=["check", "push", "pull", "sync"], help="執行動作")
     parser.add_argument("app", nargs="?", default="app.mihon", help="目標應用包名或 ID (預設: app.mihon)")
     parser.add_argument("--serial", default="127.0.0.1:16384", help="ADB 裝置序號 (預設: 127.0.0.1:16384)")

@@ -1,7 +1,7 @@
 {
   "storage_backend": "webdav",
   "webdav": {
-    "url": "https://dav.your-nas.com/DroidSaveSync",
+    "url": "https://dav.your-nas.com/SaveSync",
     "username": "your_username",
     "password": "your_password"
   },

@@ -22,7 +22,7 @@ class SyncWorker(
     private val tag = "SyncWorker"
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        Log.i(tag, "DroidSaveSync 背景排程同步工作開始執行...")
+        Log.i(tag, "SaveSync 背景排程同步工作開始執行...")
         val prefs = appContext.getSharedPreferences("droidsave_prefs", Context.MODE_PRIVATE)
         val gson = Gson()
 
@@ -70,7 +70,7 @@ class SyncWorker(
             }
         }
 
-        Log.i(tag, "DroidSaveSync 排程同步完成: $successCount / ${appsList.size} 款應用更新成功")
+        Log.i(tag, "SaveSync 排程同步完成: $successCount / ${appsList.size} 款應用更新成功")
         Result.success()
     }
 }

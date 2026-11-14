@@ -1,4 +1,4 @@
-"""DroidSaveSync 雙向狀態同調引擎 (Bidirectional State Machine Sync Engine).
+"""SaveSync 雙向狀態同調引擎 (Bidirectional State Machine Sync Engine).
 
 實作雙端時間戳記比對、三版滾動回滾、防衛性凍結與權限規格化。
 Bidirectional timestamp comparison, rolling 3-version rollback, defensive freezing, and permission normalization.
@@ -69,7 +69,7 @@ class AdbDeviceBridge:
         return res.returncode == 0
 
 
-class DroidSaveSyncEngine:
+class SaveSyncEngine:
     """雙向自動同調核心引擎 (Bidirectional Auto-Sync Core Engine)."""
 
     DEFAULT_EXCLUDES = ["cache", "code_cache", "app_webview", "no_backup"]

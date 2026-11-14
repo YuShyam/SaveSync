@@ -43,7 +43,7 @@ class WebDavClient(private val config: WebDavConfig) {
         } else if (config.username.isNotBlank() && config.password.isNotBlank()) {
             builder.header("Authorization", Credentials.basic(config.username, config.password))
         }
-        builder.header("User-Agent", "DroidSaveSync-Android/1.0")
+        builder.header("User-Agent", "SaveSync-Android/1.0")
         return builder
     }
 

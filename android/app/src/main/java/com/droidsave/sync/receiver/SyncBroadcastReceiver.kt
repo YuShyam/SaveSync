@@ -54,7 +54,7 @@ class SyncBroadcastReceiver : BroadcastReceiver() {
 
                     if (appsList.isEmpty()) {
                         Log.w(tag, "外部觸發失敗：清單內無任何應用")
-                        showToast(context, "DroidSaveSync: 同步清單為空")
+                        showToast(context, "SaveSync: 同步清單為空")
                         return@launch
                     }
 
@@ -69,7 +69,7 @@ class SyncBroadcastReceiver : BroadcastReceiver() {
                     val privilege = shellManager.detectPrivilege()
                     if (privilege == PrivilegeMode.NONE) {
                         Log.e(tag, "外部觸發失敗：設備未取得提權！")
-                        showToast(context, "DroidSaveSync 廣播觸發失敗：無有效提權")
+                        showToast(context, "SaveSync 廣播觸發失敗：無有效提權")
                         return@launch
                     }
 
@@ -82,7 +82,7 @@ class SyncBroadcastReceiver : BroadcastReceiver() {
                     }
 
                     Log.i(tag, "外部廣播全量同步完成: $successCount / ${appsList.size}")
-                    showToast(context, "DroidSaveSync (Tasker 觸發): $successCount / ${appsList.size} 款應用同步成功！")
+                    showToast(context, "SaveSync (Tasker 觸發): $successCount / ${appsList.size} 款應用同步成功！")
                 } catch (e: Exception) {
                     Log.e(tag, "外部廣播處理異常", e)
                 } finally {

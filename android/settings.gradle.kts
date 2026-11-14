@@ -13,6 +13,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "DroidSaveSync"
+rootProject.name = "SaveSync"
 include(":app")
 
