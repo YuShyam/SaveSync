@@ -54,13 +54,44 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import rikka.shizuku.Shizuku
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var shellManager: ShellManager
+    var onPrivilegeGrantedCallback: (() -> Unit)? = null
+
+    private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
+        if (grantResult == PackageManager.PERMISSION_GRANTED) {
+            onPrivilegeGrantedCallback?.invoke()
+        }
+    }
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            try {
+                Shizuku.requestPermission(1001)
+            } catch (e: Exception) {
+                // ignore
+            }
+        } else {
+            onPrivilegeGrantedCallback?.invoke()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         shellManager = ShellManager(this)
+
+        try {
+            Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+            Shizuku.addRequestPermissionResultListener(requestPermissionResultListener)
+            if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                Shizuku.requestPermission(1001)
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
 
         val shouldAutoSync = intent?.getBooleanExtra("auto_sync", false) ?: false
 
@@ -83,10 +114,21 @@ class MainActivity : ComponentActivity() {
                         context = this,
                         shellManager = shellManager,
                         initialAutoSync = shouldAutoSync,
-                        onShowToast = { msg -> Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() }
+                        onShowToast = { msg -> Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() },
+                        registerPrivilegeCallback = { cb -> onPrivilegeGrantedCallback = cb }
                     )
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            Shizuku.removeBinderReceivedListener(binderReceivedListener)
+            Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
+        } catch (e: Exception) {
+            // ignore
         }
     }
 }
@@ -97,7 +139,8 @@ fun MainScreen(
     context: Context,
     shellManager: ShellManager,
     initialAutoSync: Boolean = false,
-    onShowToast: (String) -> Unit
+    onShowToast: (String) -> Unit,
+    registerPrivilegeCallback: (((() -> Unit)) -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     var privilegeMode by remember { mutableStateOf(PrivilegeMode.NONE) }
@@ -194,6 +237,9 @@ fun MainScreen(
     }
 
     LaunchedEffect(Unit) {
+        registerPrivilegeCallback?.invoke {
+            refreshPrivilegeAndApps()
+        }
         refreshPrivilegeAndApps()
         if (initialAutoSync) {
             coroutineScope.launch {
@@ -338,12 +384,16 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
+                        .clickable {
+                            shellManager.requestShizukuPermission()
+                            refreshPrivilegeAndApps()
+                        }
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("提權狀態異常", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF991B1B))
+                            Text("提權狀態異常 (點擊請求 Shizuku 授權)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF991B1B))
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
@@ -354,7 +404,7 @@ fun MainScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "模擬器請開啟 Root；實體機請開啟 Shizuku 服務後點擊標籤重新整理。",
+                            text = "若未自動彈出授權視窗，請先至 Shizuku App 啟動服務並授權給 SaveSync。",
                             fontSize = 11.sp,
                             color = Color(0xFF7F1D1D),
                             lineHeight = 16.sp

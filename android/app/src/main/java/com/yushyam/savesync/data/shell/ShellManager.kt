@@ -39,12 +39,40 @@ class ShellManager(private val context: Context) {
     // 主動探針：除檢查 Binder 存活與權限外，必須實地執行命令驗證 Shizuku 行程是否真能工作
     fun isShizukuFunctional(): Boolean {
         return try {
-            if (!Shizuku.pingBinder()) return false
-            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) return false
+            var attempts = 0
+            while (!Shizuku.pingBinder() && attempts < 15) {
+                Thread.sleep(100)
+                attempts++
+            }
+            if (!Shizuku.pingBinder()) {
+                Log.w(tag, "Shizuku.pingBinder() returned false after ${attempts * 100}ms")
+                return false
+            }
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                Log.w(tag, "Shizuku.checkSelfPermission() is not granted")
+                return false
+            }
             val probe = execShizukuDirect("id")
-            probe.contains("uid=")
+            val ok = probe.contains("uid=")
+            if (!ok) {
+                Log.w(tag, "Shizuku probe failed, returned: $probe")
+            }
+            ok
         } catch (e: Exception) {
+            Log.e(tag, "isShizukuFunctional exception", e)
             false
+        }
+    }
+
+    fun requestShizukuPermission(requestCode: Int = 1001) {
+        try {
+            if (Shizuku.pingBinder()) {
+                if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                    Shizuku.requestPermission(requestCode)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "requestShizukuPermission failed", e)
         }
     }
 
@@ -88,14 +116,7 @@ class ShellManager(private val context: Context) {
     }
 
     private fun execShizukuDirect(command: String): String {
-        val method = Shizuku::class.java.getDeclaredMethod(
-            "newProcess",
-            Array<String>::class.java,
-            Array<String>::class.java,
-            String::class.java
-        )
-        method.isAccessible = true
-        val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
+        val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
         val output = process.inputStream.bufferedReader().use { it.readText() }
         val errOutput = process.errorStream.bufferedReader().use { it.readText() }
         process.waitFor()
