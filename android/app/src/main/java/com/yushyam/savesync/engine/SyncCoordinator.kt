@@ -67,11 +67,46 @@ class SyncCoordinator(
         }
     }
 
+    fun resolveAppDirectory(packageName: String): String {
+        val sdcardData = "/sdcard/Android/data/$packageName"
+        val checkSdcard = shell.exec("if [ -d '$sdcardData' ]; then echo 'EXISTS'; fi")
+        if (checkSdcard.contains("EXISTS")) {
+            return sdcardData
+        }
+
+        val internalData = "/data/data/$packageName"
+        val checkInternal = shell.exec("if [ -d '$internalData' ]; then echo 'EXISTS'; fi")
+        if (checkInternal.contains("EXISTS")) {
+            return internalData
+        }
+
+        return sdcardData
+    }
+
+    private fun buildRestoreCommand(targetDir: String, tmpTarPath: String): String {
+        return if (targetDir.startsWith("/sdcard/")) {
+            "mkdir -p $targetDir && cd $targetDir && toybox tar -xzf $tmpTarPath && rm -f $tmpTarPath"
+        } else {
+            val uidGidStr = shell.exec("stat -c '%u %g' $targetDir")
+            val parts = uidGidStr.split("\\s+".toRegex())
+            val uid = parts.getOrNull(0) ?: ""
+            val gid = parts.getOrNull(1) ?: uid
+            val chownPart = if (uid.isNotBlank()) " && chown -R $uid:$gid $targetDir && restorecon -R $targetDir" else ""
+            "mkdir -p $targetDir && cd $targetDir && toybox tar -xzf $tmpTarPath$chownPart && rm -f $tmpTarPath"
+        }
+    }
+
     fun pushApp(profile: AppSyncProfile, maxKeepSnapshots: Int = 3): Boolean {
         shell.exec("am force-stop ${profile.packageName}")
+        val targetDir = resolveAppDirectory(profile.packageName)
+
+        if (profile.packageName == "app.mihon") {
+            shell.exec("latest_bk=\$(find /sdcard/Documents /sdcard/Download -name '*.tachibk' -type f 2>/dev/null | head -n 1); if [ -n \"\$latest_bk\" ]; then mkdir -p /sdcard/Android/data/app.mihon/backup && cp \"\$latest_bk\" /sdcard/Android/data/app.mihon/backup/; fi")
+        }
+
         val tmpTarPath = "/data/local/tmp/${profile.packageName}_app_sync.tar.gz"
         val excludes = profile.excludes.joinToString(" ") { "--exclude='$it'" }
-        shell.exec("cd /data/data/${profile.packageName} && toybox tar -czf $tmpTarPath $excludes . && chmod 666 $tmpTarPath")
+        shell.exec("cd $targetDir && toybox tar -czf $tmpTarPath $excludes . && chmod 666 $tmpTarPath")
 
         val tmpTarFile = File(tmpTarPath)
         if (!tmpTarFile.exists() || tmpTarFile.length() == 0L) {
@@ -129,21 +164,20 @@ class SyncCoordinator(
         // 核心安全防護：在覆蓋本地存檔前，強制產生 1 份本地快照備份
         createLocalRollbackSnapshot(profile, maxKeepSnapshots)
 
-        // 取得本地目標應用的 UID 與 GID
-        val uidGidStr = shell.exec("stat -c '%u %g' /data/data/${profile.packageName}")
-        val parts = uidGidStr.split("\\s+".toRegex())
-        val uid = parts.getOrNull(0) ?: return false
-        val gid = parts.getOrNull(1) ?: uid
-
         shell.exec("am force-stop ${profile.packageName}")
 
+        val targetDir = resolveAppDirectory(profile.packageName)
         val tmpTarPath = "/data/local/tmp/${profile.packageName}_restore.tar.gz"
         localFile.setReadable(true, false)
         shell.exec("cat ${localFile.absolutePath} > $tmpTarPath && chmod 666 $tmpTarPath")
         localFile.delete()
 
-        val restoreCmd = "cd /data/data/${profile.packageName} && toybox tar -xzf $tmpTarPath && chown -R $uid:$gid /data/data/${profile.packageName} && restorecon -R /data/data/${profile.packageName} && rm -f $tmpTarPath"
+        val restoreCmd = buildRestoreCommand(targetDir, tmpTarPath)
         shell.exec(restoreCmd)
+
+        if (profile.packageName == "app.mihon") {
+            shell.exec("if [ -d /sdcard/Android/data/app.mihon/backup ]; then mkdir -p /sdcard/Documents/Mihon && cp -r /sdcard/Android/data/app.mihon/backup/* /sdcard/Documents/Mihon/; fi")
+        }
 
         saveLocalLedger(remoteManifest)
         return true
@@ -152,13 +186,14 @@ class SyncCoordinator(
     // 建立本地安全還原快照 (滾動保留最新指定份數)
     fun createLocalRollbackSnapshot(profile: AppSyncProfile, maxKeep: Int = 3): Boolean {
         return try {
+            val targetDir = resolveAppDirectory(profile.packageName)
             val snapshotDir = File(context.filesDir, "snapshots/${profile.packageName}")
             if (!snapshotDir.exists()) snapshotDir.mkdirs()
 
             val now = System.currentTimeMillis()
             val tmpSnapPath = "/data/local/tmp/${profile.packageName}_snap_${now}.tar.gz"
             val excludes = profile.excludes.joinToString(" ") { "--exclude='$it'" }
-            shell.exec("cd /data/data/${profile.packageName} && toybox tar -czf $tmpSnapPath $excludes . && chmod 666 $tmpSnapPath")
+            shell.exec("cd $targetDir && toybox tar -czf $tmpSnapPath $excludes . && chmod 666 $tmpSnapPath")
 
             val tmpFile = File(tmpSnapPath)
             if (tmpFile.exists() && tmpFile.length() > 0L) {
@@ -205,17 +240,19 @@ class SyncCoordinator(
         if (!sourceFile.exists()) return false
 
         shell.exec("am force-stop ${profile.packageName}")
-        val uidGidStr = shell.exec("stat -c '%u %g' /data/data/${profile.packageName}")
-        val parts = uidGidStr.split("\\s+".toRegex())
-        val uid = parts.getOrNull(0) ?: return false
-        val gid = parts.getOrNull(1) ?: uid
+        val targetDir = resolveAppDirectory(profile.packageName)
 
         val tmpTarPath = "/data/local/tmp/${profile.packageName}_rollback.tar.gz"
         sourceFile.setReadable(true, false)
         shell.exec("cat ${sourceFile.absolutePath} > $tmpTarPath && chmod 666 $tmpTarPath")
 
-        val restoreCmd = "cd /data/data/${profile.packageName} && toybox tar -xzf $tmpTarPath && chown -R $uid:$gid /data/data/${profile.packageName} && restorecon -R /data/data/${profile.packageName} && rm -f $tmpTarPath"
+        val restoreCmd = buildRestoreCommand(targetDir, tmpTarPath)
         shell.exec(restoreCmd)
+
+        if (profile.packageName == "app.mihon") {
+            shell.exec("if [ -d /sdcard/Android/data/app.mihon/backup ]; then mkdir -p /sdcard/Documents/Mihon && cp -r /sdcard/Android/data/app.mihon/backup/* /sdcard/Documents/Mihon/; fi")
+        }
+
         return true
     }
 
@@ -232,7 +269,8 @@ class SyncCoordinator(
     }
 
     private fun getLocalDirMtimeMs(packageName: String): Long {
-        val out = shell.exec("stat -c '%Y' /data/data/$packageName")
+        val targetDir = resolveAppDirectory(packageName)
+        val out = shell.exec("stat -c '%Y' $targetDir")
         return (out.toLongOrNull() ?: 0L) * 1000L
     }
 
