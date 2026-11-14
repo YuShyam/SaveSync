@@ -37,20 +37,20 @@ jobs:
       - name: Prepare Artifact
         run: |
           mkdir -p output
-          cp android/app/build/outputs/apk/debug/app-debug.apk output/SaveSync-v1.0.0-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk output/SaveSync-v1.0.0.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SaveSync-v1.0.0-debug
-          path: output/SaveSync-v1.0.0-debug.apk
+          name: SaveSync-v1.0.0
+          path: output/SaveSync-v1.0.0.apk
           retention-days: 14
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: output/SaveSync-v1.0.0-debug.apk
+          files: output/SaveSync-v1.0.0.apk
           name: SaveSync ${{ github.ref_name }}
           draft: false
           prerelease: false

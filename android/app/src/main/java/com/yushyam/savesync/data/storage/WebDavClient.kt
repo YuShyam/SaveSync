@@ -51,11 +51,11 @@ class WebDavClient(private val config: WebDavConfig) {
         if (config.url.isBlank()) return false
         authenticator.reset()
         return try {
-            val req = newRequestBuilder(config.url, "PROPFIND")
-                .method("PROPFIND", "".toRequestBody("text/xml".toMediaType()))
+            val req = newRequestBuilder(config.url, "OPTIONS")
+                .method("OPTIONS", null)
                 .build()
             val resp = client.newCall(req).execute()
-            resp.isSuccessful || resp.code == 207 || resp.code == 405
+            resp.isSuccessful || resp.code == 200 || resp.code == 207 || resp.code == 405
         } catch (e: Exception) {
             false
         }

@@ -183,8 +183,8 @@ class WebDavAuthenticator(
             if (!opaque.isNullOrBlank()) {
                 append(", opaque=\"$opaque\"")
             }
-            if (algorithm.isNotBlank() && !algorithm.equals("MD5", ignoreCase = true)) {
-                append(", algorithm=$algorithm")
+            if (algorithm.isNotBlank()) {
+                append(", algorithm=\"$algorithm\"")
             }
         }
     }
