@@ -181,21 +181,8 @@ fun MainScreen(
                     appsList.addAll(saved)
                 }
             } else {
-                val pm = context.packageManager
-                val installed = pm.getInstalledPackages(0)
-                val foundProfiles = mutableListOf<AppSyncProfile>()
-
-                for (pkg in installed) {
-                    if (pkg.packageName == "app.mihon") {
-                        val label = pm.getApplicationLabel(pkg.applicationInfo).toString()
-                        foundProfiles.add(AppSyncProfile("mihon", pkg.packageName, label))
-                    }
-                }
-
                 withContext(Dispatchers.Main) {
                     appsList.clear()
-                    appsList.addAll(foundProfiles)
-                    saveAppsListToPrefs()
                 }
             }
 
