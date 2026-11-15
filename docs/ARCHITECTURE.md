@@ -147,6 +147,30 @@ sequenceDiagram
 
 ---
 
+### ADR-06: 擴展支援「自訂絕對路徑 (Custom Path)」與「防假性備份安全閥」
+- **現狀背景**：
+  1. 免 Root 實體設備受限於 Android SELinux/DAC 限制，無法直接存取 `/data/data/<pkg>/`。若應用程式將空目錄殘留在 `/sdcard/Android/data/<pkg>/`，預設探測會誤將空目錄備份至雲端，造成嚴重的「假性備份（Phantom Backup）」。
+  2. 諸多模擬器（如 RetroArch、PPSSPP）或第三方工具的存檔目錄並非標準 Package 目錄。
+- **決策內容**：
+  1. 資料模型 `AppSyncProfile` 新增 `customDirectoryPath` 選用欄位，優先採用使用者明確指定之絕對路徑。
+  2. 引入防假性備份三道防線：
+     - **空目錄檢驗 (Empty Guard)**：檔案數為 0 或大小為 0 Byte 拒絕備份。
+     - **斷崖式縮水突變保護 (Anomaly Drop Protection)**：本次備份體積若較前次縮水達 90% 以上，強制阻斷上傳並發送警報。
+     - **初次設定目視預覽 (Pre-flight Inspection)**：在使用者綁定路徑時即時回報檔案總數與總容量。
+- **影響評估**：大幅提升通用性，徹底杜絕異機還原時備份到空氣的災難。
+
+---
+
+### ADR-07: 受限應用（如 Mihon）外部化路徑補丁與 Mono-repo CI/CD 集中維護
+- **現狀背景**：Mihon 等特定應用核心 SQLite 資料庫硬編碼儲存於內部 `/data/data/`，免 Root 手機無法透過常規 Shizuku 直接同步。
+- **決策內容**：
+  1. 透過 Hook/Smali 補丁重定向 `Context.getDatabasePath` 至 `/sdcard/Android/data/<pkg>/files/databases/`。
+  2. 採用單一 GitHub 集中倉庫（Mono-repo）維護多款開源應用的修補管線，利用 GitHub Actions 定時監聽上游 Release。
+  3. 藉由 Release Tag 隔離各應用更新，手機端以 Obtainium（配置 PAT + Shizuku 靜默安裝）進行單點追蹤與自動更新。
+- **影響評估**：用戶無需維護多個繁瑣專案，即可享受全自動構建與零點擊升級體驗。
+
+---
+
 ## 四、 關鍵 Shell 指令管線標準
 
 | 階段 | 標準指令 | 說明 |

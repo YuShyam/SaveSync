@@ -171,6 +171,8 @@ fun MainScreen(
     var showAddAppDialog by remember { mutableStateOf(false) }
     var appToRemove by remember { mutableStateOf<AppSyncProfile?>(null) }
     var appForSnapshots by remember { mutableStateOf<AppSyncProfile?>(null) }
+    var appForConflict by remember { mutableStateOf<AppSyncProfile?>(null) }
+    var appForSelectiveSync by remember { mutableStateOf<AppSyncProfile?>(null) }
     var snapshotList by remember { mutableStateOf<List<SnapshotItem>>(emptyList()) }
     var installedAppCandidates by remember { mutableStateOf<List<CandidateApp>>(emptyList()) }
 
@@ -518,6 +520,10 @@ fun MainScreen(
                                     onShowToast("無提權權限\n$privilegeDiagnosis")
                                     return@AppCardItemClean
                                 }
+                                if (status == AppSyncStatus.CONFLICT) {
+                                    appForConflict = app
+                                    return@AppCardItemClean
+                                }
                                 coroutineScope.launch {
                                     appStatusMap[app.packageName] = AppSyncStatus.SYNCING
                                     val (ok, message) = withContext(Dispatchers.IO) {
@@ -526,6 +532,7 @@ fun MainScreen(
                                     }
                                     appStatusMap[app.packageName] = if (ok) AppSyncStatus.UP_TO_DATE else AppSyncStatus.ERROR
                                     onShowToast("${app.displayName}: $message")
+                                    if (ok) checkStatusForApp(app)
                                 }
                             },
                             onDeleteClick = {
@@ -540,6 +547,9 @@ fun MainScreen(
                                         appForSnapshots = app
                                     }
                                 }
+                            },
+                            onSelectiveSyncClick = {
+                                appForSelectiveSync = app
                             }
                         )
                     }
@@ -700,7 +710,190 @@ fun MainScreen(
         )
     }
 
-    // 刪除確認對話框
+    // 存檔衝突決策對話框 (Conflict Resolution Dialog)
+    if (appForConflict != null) {
+        val targetApp = appForConflict!!
+        var isResolving by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { if (!isResolving) appForConflict = null },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFDC2626)) },
+            title = { Text("存檔衝突：${targetApp.displayName}", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "偵測到雲端存檔與本地存檔皆有更新（雙邊時間戳記不一致），請選擇解決策略：",
+                        fontSize = 13.sp,
+                        color = Color(0xFF334155),
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFF8FAFC),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("1. 保留本地 ➜ 強制覆蓋雲端 (Force Push)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0F172A))
+                            Text("以這台裝置目前的最新存檔為準，推送到 WebDAV 並升級版本號。", fontSize = 11.sp, color = Color(0xFF64748B))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("2. 捨棄本地 ➜ 強制下載雲端 (Force Pull)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2563EB))
+                            Text("拉取雲端儲存庫的存檔覆蓋本地手機資料。", fontSize = 11.sp, color = Color(0xFF64748B))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "※ 安全保證：不論選擇哪一項，執行前系統皆會自動建立 1 份本地快照備份。",
+                        fontSize = 11.sp,
+                        color = Color(0xFF16A34A),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            isResolving = true
+                            appStatusMap[targetApp.packageName] = AppSyncStatus.SYNCING
+                            val (ok, msg) = withContext(Dispatchers.IO) {
+                                val coordinator = SyncCoordinator(context, shellManager, webDavConfig)
+                                coordinator.forcePushApp(targetApp, maxSnapshots)
+                            }
+                            isResolving = false
+                            appForConflict = null
+                            appStatusMap[targetApp.packageName] = if (ok) AppSyncStatus.UP_TO_DATE else AppSyncStatus.ERROR
+                            onShowToast(msg)
+                            checkStatusForApp(targetApp)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+                    enabled = !isResolving
+                ) {
+                    Text("強制上傳 (覆蓋雲端)")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        onClick = { appForConflict = null },
+                        enabled = !isResolving
+                    ) {
+                        Text("取消", color = Color(0xFF64748B))
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isResolving = true
+                                appStatusMap[targetApp.packageName] = AppSyncStatus.SYNCING
+                                val (ok, msg) = withContext(Dispatchers.IO) {
+                                    val coordinator = SyncCoordinator(context, shellManager, webDavConfig)
+                                    coordinator.forcePullApp(targetApp, maxSnapshots)
+                                }
+                                isResolving = false
+                                appForConflict = null
+                                appStatusMap[targetApp.packageName] = if (ok) AppSyncStatus.UP_TO_DATE else AppSyncStatus.ERROR
+                                onShowToast(msg)
+                                checkStatusForApp(targetApp)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        enabled = !isResolving
+                    ) {
+                        Text("強制下載 (覆蓋本地)")
+                    }
+                }
+            }
+        )
+    }
+
+    // 細粒度同步項目設定對話框 (Selective Sync Dialog)
+    if (appForSelectiveSync != null) {
+        val targetApp = appForSelectiveSync!!
+        val availablePaths = listOf("databases/", "shared_prefs/", "files/")
+        val currentSelected = remember(targetApp) {
+            mutableStateListOf<String>().apply { addAll(targetApp.relativePaths) }
+        }
+
+        AlertDialog(
+            onDismissRequest = { appForSelectiveSync = null },
+            icon = { Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFF0F172A)) },
+            title = { Text("${targetApp.displayName} 同步項目", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "勾選需要納入跨裝置同步的子目錄（未勾選的項目在同步時將維持本地現狀不被覆蓋）：",
+                        fontSize = 12.sp,
+                        color = Color(0xFF475569)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    availablePaths.forEach { path ->
+                        val isChecked = currentSelected.contains(path)
+                        val (label, desc) = when (path) {
+                            "databases/" -> "databases/ (核心資料庫與歷史)" to "儲存漫畫歷史、書架進度與章節狀態"
+                            "shared_prefs/" -> "shared_prefs/ (介面與偏好設定)" to "若不同裝置設定不同，建議取消勾選"
+                            "files/" -> "files/ (附加檔案與資料)" to "包含擴充套件快取或離線資源"
+                            else -> path to ""
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isChecked) Color(0xFFF1F5F9) else Color.Transparent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (isChecked) {
+                                        if (currentSelected.size > 1) currentSelected.remove(path)
+                                    } else {
+                                        currentSelected.add(path)
+                                    }
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        if (checked) currentSelected.add(path)
+                                        else if (currentSelected.size > 1) currentSelected.remove(path)
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0F172A))
+                                    Text(desc, fontSize = 11.sp, color = Color(0xFF64748B))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        targetApp.relativePaths = currentSelected.toList()
+                        saveAppsListToPrefs()
+                        appForSelectiveSync = null
+                        onShowToast("已儲存同步項目設定")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A))
+                ) {
+                    Text("儲存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { appForSelectiveSync = null }) {
+                    Text("取消", color = Color(0xFF64748B))
+                }
+            }
+        )
+    }
     if (appToRemove != null) {
         val target = appToRemove!!
         AlertDialog(
@@ -1230,12 +1423,17 @@ fun AppCardItemClean(
     status: AppSyncStatus,
     onSyncClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onShowSnapshots: () -> Unit
+    onShowSnapshots: () -> Unit,
+    onSelectiveSyncClick: () -> Unit
 ) {
+    val isConflict = status == AppSyncStatus.CONFLICT
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isConflict) Color(0xFFFCA5A5) else Color(0xFFE2E8F0)
+        ),
         shadowElevation = 1.dp,
         modifier = Modifier
             .fillMaxWidth()
@@ -1284,41 +1482,69 @@ fun AppCardItemClean(
             HorizontalDivider(color = Color(0xFFF8FAFC))
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 第三列：操作功能列 (左：歷史快照；右：主要同步按鈕)
+            // 第三列：操作功能列 (左：歷史快照 + 同步項目；右：主要同步/解決衝突按鈕)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 歷史快照入口
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable { onShowSnapshots() }
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.History,
-                        contentDescription = "快照清單",
-                        tint = Color(0xFF64748B),
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "歷史版本",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF475569)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 歷史快照入口
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onShowSnapshots() }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = "快照清單",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "歷史版本",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // 細粒度同步項目設定入口
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onSelectiveSyncClick() }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = "同步項目",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        val pathCount = app.relativePaths.size
+                        Text(
+                            "項目 ($pathCount)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569)
+                        )
+                    }
                 }
 
-                // 主要操作：同步按鈕 (深黑底色 + 白色文字與圖示)
+                // 主要操作：同步按鈕 (衝突時以警示紅底顯示「解決衝突」)
                 Button(
                     onClick = onSyncClick,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF0F172A),
+                        containerColor = if (isConflict) Color(0xFFDC2626) else Color(0xFF0F172A),
                         contentColor = Color.White
                     ),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
@@ -1333,6 +1559,14 @@ fun AppCardItemClean(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("同步中", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    } else if (isConflict) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("解決衝突", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     } else {
                         Icon(
                             Icons.Default.CloudUpload,

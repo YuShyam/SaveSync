@@ -5,7 +5,7 @@ data class AppSyncProfile(
     val packageName: String,
     val displayName: String,
     var isEnabled: Boolean = true,
-    val relativePaths: List<String> = listOf("databases/", "shared_prefs/", "files/"),
+    var relativePaths: List<String> = listOf("databases/", "shared_prefs/", "files/"),
     val excludes: List<String> = DefaultExcludes.BASE
 )
 

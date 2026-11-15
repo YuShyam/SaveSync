@@ -59,7 +59,7 @@ class SyncCoordinator(
                 Pair(true, "已是最新")
             }
             AppSyncStatus.CONFLICT -> {
-                Pair(false, "存檔衝突，請先建立快照")
+                Pair(false, "檢測到存檔衝突，請點擊手動解決")
             }
             else -> {
                 val ok = pushApp(profile, maxKeepSnapshots)
@@ -111,6 +111,24 @@ class SyncCoordinator(
         }
     }
 
+    /**
+     * 強制以本地存檔覆蓋雲端 (解決衝突)
+     * Force push local save to remote WebDAV to resolve conflict.
+     */
+    fun forcePushApp(profile: AppSyncProfile, maxKeepSnapshots: Int = 3): Pair<Boolean, String> {
+        val ok = pushApp(profile, maxKeepSnapshots)
+        return Pair(ok, if (ok) "已強制上傳並覆蓋雲端" else "強制上傳失敗")
+    }
+
+    /**
+     * 強制以下載雲端存檔覆蓋本地 (解決衝突)
+     * Force pull remote save to local storage to resolve conflict.
+     */
+    fun forcePullApp(profile: AppSyncProfile, maxKeepSnapshots: Int = 3): Pair<Boolean, String> {
+        val ok = pullApp(profile, maxKeepSnapshots)
+        return Pair(ok, if (ok) "已強制下載並覆蓋本地" else "強制下載失敗")
+    }
+
     fun pushApp(profile: AppSyncProfile, maxKeepSnapshots: Int = 3): Boolean {
         shell.exec("am force-stop ${profile.packageName}")
         val targetDir = resolveAppDirectory(profile.packageName)
@@ -121,7 +139,21 @@ class SyncCoordinator(
 
         val effectiveExcludes = resolveExcludes(profile)
         val excludesStr = effectiveExcludes.joinToString(" ") { "--exclude='$it'" }
-        shell.exec("cd $targetDir && toybox tar -czf ${stagingFile.absolutePath} $excludesStr .")
+
+        // 細粒度選擇性打包 (Selective Archive according to relativePaths)
+        val targets = if (profile.relativePaths.isEmpty()) {
+            listOf(".")
+        } else {
+            profile.relativePaths.map { it.trim().trimEnd('/') }.filter { it.isNotBlank() }
+        }
+        val targetsArg = targets.joinToString(" ")
+
+        // 檢查目標目錄是否存在以避免 tar 報錯 (Verify existing targets)
+        val checkExisting = shell.exec("cd $targetDir && for d in $targetsArg; do if [ -e \"\$d\" ]; then echo \"\$d\"; fi; done")
+        val validTargets = checkExisting.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val finalTargets = if (validTargets.isNotEmpty()) validTargets.joinToString(" ") else "."
+
+        shell.exec("cd $targetDir && toybox tar -czf ${stagingFile.absolutePath} $excludesStr $finalTargets")
 
         if (!stagingFile.exists() || stagingFile.length() == 0L) {
             stagingFile.delete()
