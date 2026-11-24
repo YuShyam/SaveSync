@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -34,6 +38,16 @@
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
+
         <!-- 外部自動化廣播接收器 (供 Tasker / 自動化腳本呼叫，支援短別名 sync.all 與 sync) -->
         <receiver
             android:name=".receiver.SyncBroadcastReceiver"
@@ -45,6 +59,18 @@
                 <action android:name="sync" />
             </intent-filter>
         </receiver>
+
+        <!-- 下拉通知欄快捷磁貼 (Quick Settings Tile Service) -->
+        <service
+            android:name=".service.SaveSyncTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="SaveSync 立即同步"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
     </application>
 

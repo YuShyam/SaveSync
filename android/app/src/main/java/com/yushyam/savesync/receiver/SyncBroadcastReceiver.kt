@@ -38,19 +38,9 @@ class SyncBroadcastReceiver : BroadcastReceiver() {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val prefs = context.getSharedPreferences("savesync_prefs", Context.MODE_PRIVATE)
-                    val gson = Gson()
-
                     val json = prefs.getString("saved_apps_list", null)
-                    val appsList: List<AppSyncProfile> = if (json != null) {
-                        try {
-                            val type = object : TypeToken<List<AppSyncProfile>>() {}.type
-                            gson.fromJson(json, type)
-                        } catch (e: Exception) {
-                            emptyList()
-                        }
-                    } else {
-                        emptyList()
-                    }
+                    val appsList: List<AppSyncProfile> =
+                        com.yushyam.savesync.data.model.AppSyncProfileCodec.parseList(json)
 
                     if (appsList.isEmpty()) {
                         Log.w(tag, "外部觸發失敗：清單內無任何應用")
@@ -63,26 +53,20 @@ class SyncBroadcastReceiver : BroadcastReceiver() {
                         username = prefs.getString("webdav_user", "") ?: "",
                         password = prefs.getString("webdav_pass", "") ?: ""
                     )
-                    val maxSnapshots = prefs.getInt("max_snapshots", 3)
+                    val minSnapshots = prefs.getInt("min_snapshots", prefs.getInt("max_snapshots", 3))
+                    val retentionDays = prefs.getInt("retention_days", 7)
 
                     val shellManager = ShellManager(context)
-                    val privilege = shellManager.detectPrivilege()
-                    if (privilege == PrivilegeMode.NONE) {
-                        Log.e(tag, "外部觸發失敗：設備未取得提權！")
-                        showToast(context, "SaveSync 廣播觸發失敗：無有效提權")
-                        return@launch
-                    }
-
                     val coordinator = SyncCoordinator(context, shellManager, webDavConfig)
                     var successCount = 0
 
                     appsList.forEach { app ->
-                        val (ok, _) = coordinator.autoSyncApp(app, maxSnapshots)
+                        val (ok, _) = coordinator.autoSyncApp(app, minSnapshots, retentionDays)
                         if (ok) successCount++
                     }
 
                     Log.i(tag, "外部廣播全量同步完成: $successCount / ${appsList.size}")
-                    showToast(context, "SaveSync (Tasker 觸發): $successCount / ${appsList.size} 款應用同步成功！")
+                    showToast(context, "SaveSync: $successCount / ${appsList.size} 款應用同步成功")
                 } catch (e: Exception) {
                     Log.e(tag, "外部廣播處理異常", e)
                 } finally {

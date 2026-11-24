@@ -24,19 +24,9 @@ class SyncWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         Log.i(tag, "SaveSync 背景排程同步工作開始執行...")
         val prefs = appContext.getSharedPreferences("savesync_prefs", Context.MODE_PRIVATE)
-        val gson = Gson()
-
         val json = prefs.getString("saved_apps_list", null)
-        val appsList: List<AppSyncProfile> = if (json != null) {
-            try {
-                val type = object : TypeToken<List<AppSyncProfile>>() {}.type
-                gson.fromJson(json, type)
-            } catch (e: Exception) {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
+        val appsList: List<AppSyncProfile> =
+            com.yushyam.savesync.data.model.AppSyncProfileCodec.parseList(json)
 
         if (appsList.isEmpty()) {
             Log.i(tag, "目前無已配置的同步應用，略過排程。")
@@ -48,21 +38,16 @@ class SyncWorker(
             username = prefs.getString("webdav_user", "") ?: "",
             password = prefs.getString("webdav_pass", "") ?: ""
         )
-        val maxSnapshots = prefs.getInt("max_snapshots", 3)
+        val minSnapshots = prefs.getInt("min_snapshots", prefs.getInt("max_snapshots", 3))
+        val retentionDays = prefs.getInt("retention_days", 7)
 
         val shellManager = ShellManager(appContext)
-        val privilege = shellManager.detectPrivilege()
-        if (privilege == PrivilegeMode.NONE) {
-            Log.w(tag, "排程同步失敗：目前設備未取得提權！")
-            return@withContext Result.retry()
-        }
-
         val coordinator = SyncCoordinator(appContext, shellManager, webDavConfig)
         var successCount = 0
 
         appsList.forEach { app ->
             try {
-                val (ok, msg) = coordinator.autoSyncApp(app, maxSnapshots)
+                val (ok, msg) = coordinator.autoSyncApp(app, minSnapshots, retentionDays)
                 if (ok) successCount++
                 Log.i(tag, "應用 [${app.displayName}] 同步結果: $ok ($msg)")
             } catch (e: Exception) {

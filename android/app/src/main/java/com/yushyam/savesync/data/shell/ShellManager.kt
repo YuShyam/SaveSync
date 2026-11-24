@@ -16,15 +16,32 @@ enum class PrivilegeMode {
 class ShellManager(private val context: Context) {
 
     private val tag = "ShellManager"
+    private val prefs by lazy { context.getSharedPreferences("savesync_prefs", Context.MODE_PRIVATE) }
 
-    // 取得當前可用的提權模式 (具備實地主動探針檢驗)
-    fun detectPrivilege(): PrivilegeMode {
-        if (isRootAvailable()) return PrivilegeMode.ROOT
-        if (isShizukuFunctional()) return PrivilegeMode.SHIZUKU
-        return PrivilegeMode.NONE
+    fun getPreferredMode(): String {
+        return prefs.getString("privilege_mode_pref", "AUTO") ?: "AUTO"
     }
 
-    private fun isRootAvailable(): Boolean {
+    fun setPreferredMode(mode: String) {
+        prefs.edit().putString("privilege_mode_pref", mode).apply()
+    }
+
+    // 取得當前可用的提權模式 (結合使用者手動偏好與實地探針檢驗)
+    fun detectPrivilege(): PrivilegeMode {
+        return when (getPreferredMode()) {
+            "ROOT" -> if (isRootAvailable()) PrivilegeMode.ROOT else PrivilegeMode.NONE
+            "SHIZUKU" -> if (isShizukuFunctional()) PrivilegeMode.SHIZUKU else PrivilegeMode.NONE
+            "NONE" -> PrivilegeMode.NONE
+            else -> {
+                // AUTO 模式
+                if (isRootAvailable()) PrivilegeMode.ROOT
+                else if (isShizukuFunctional()) PrivilegeMode.SHIZUKU
+                else PrivilegeMode.NONE
+            }
+        }
+    }
+
+    fun isRootAvailable(): Boolean {
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
             val reader = BufferedReader(InputStreamReader(process.inputStream))
@@ -64,33 +81,38 @@ class ShellManager(private val context: Context) {
         }
     }
 
-    fun requestShizukuPermission(requestCode: Int = 1001) {
-        try {
-            if (Shizuku.pingBinder()) {
-                if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                    Shizuku.requestPermission(requestCode)
-                }
+    fun requestShizukuPermission(requestCode: Int = 1001): String {
+        return try {
+            if (!Shizuku.pingBinder()) {
+                "Shizuku 服務尚未啟動，請先在 Shizuku App 中以無線偵錯或 ADB 啟動"
+            } else if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                "Shizuku 已完成授權並正常運作"
+            } else {
+                Shizuku.requestPermission(requestCode)
+                "已發送授權請求，請於系統彈窗中允許"
             }
         } catch (e: Exception) {
             Log.e(tag, "requestShizukuPermission failed", e)
+            "請求授權失敗：${e.message}"
         }
     }
 
     // 取得提權狀態之深度診斷資訊，便於引導使用者修復
     fun getPrivilegeDiagnosis(): String {
-        if (isRootAvailable()) return "Root 權限已啟用 (UID 0)"
-        if (isShizukuFunctional()) return "Shizuku 服務運行中 (UID 2000)"
+        val rootOk = isRootAvailable()
+        val shizukuOk = isShizukuFunctional()
 
-        return try {
-            if (!Shizuku.pingBinder()) {
-                "尚未取得提權（未偵測到 Root 或 Shizuku 服務）"
-            } else if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                "Shizuku 已安裝，但尚未授權給 SaveSync"
-            } else {
-                "Shizuku 已授權，但服務尚未透過無線偵錯或 ADB 啟動"
+        return when (getPreferredMode()) {
+            "ROOT" -> if (rootOk) "已強制指定 Root 模式 (UID 0)" else "Root 模式啟用中，但尚未取得 su 權限"
+            "SHIZUKU" -> if (shizukuOk) "已強制指定 Shizuku 模式 (UID 2000)" else "Shizuku 模式啟用中，但服務未連線或未授權"
+            "NONE" -> "已手動指定一般模式 (Native 沙盒)"
+            else -> {
+                if (rootOk) "自動偵測：Root 權限已啟用 (UID 0)"
+                else if (shizukuOk) "自動偵測：Shizuku 服務運行中 (UID 2000)"
+                else if (!Shizuku.pingBinder()) "尚未取得提權（未偵測到 Root 或 Shizuku 服務）"
+                else if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) "Shizuku 服務中，但尚未授權給 SaveSync"
+                else "未取得系統沙盒提權 (一般模式)"
             }
-        } catch (e: Exception) {
-            "未取得系統沙盒提權"
         }
     }
 
